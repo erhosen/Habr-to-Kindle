@@ -247,37 +247,3 @@ def gif_is_animated(path):
     @rtype: C{bool}
     """
     return GifInfo(file(path,'rb'), CHECK_IS_ANIMATED).frameCount > 1
-
-if __name__ == '__main__':
-    from optparse import OptionParser
-    parser = OptionParser(description=__doc__.split('\n\n')[0],
-            version="%%prog v%s" % __version__, usage="%prog <path> ...")
-
-    opts, args = parser.parse_args()
-
-    if args:
-        for fpath in args:
-            try:
-                info = GifInfo(fpath, CHECK_COUNT_FRAMES)
-                warnFlags = (
-                        (info.warnFlags & WARN_BAD_IMG     and 'I' or ' ') +
-                        (info.warnFlags & WARN_BAD_EXT     and 'X' or ' ') +
-                        (info.warnFlags & WARN_BAD_SIZE    and 'C' or ' ') +
-                        (info.warnFlags & WARN_BAD_BGCOLOR and 'B' or ' ') +
-                        (info.warnFlags & WARN_EOF         and 'E' or ' ') +
-                        (info.warnFlags & WARN_TRUNC       and 'T' or ' ') +
-                        (info.warnFlags & WARN_LOOP_POS    and 'L' or ' ')
-                    )
-                print "[%s](%3s Frames): %s" % (warnFlags, info.frameCount, info.path)
-            except BadHeaderException, err:
-                print "%s: %s" % (str(err), fpath)
-        print "\nWarning Flags:"
-        print " I = Image Chunk Corruption/Truncation"
-        print " X = Extension Chunk Corruption/Truncation"
-        print " C = Image Chunk Dimensions Exceed Global Canvas"
-        print " B = Bad Background Color (Index Exceeds Palette Size)"
-        print " E = Unexpected EOF Encountered (Missing Image Terminator)"
-        print " T = EOF Encountered Within A Block Header (Corrupt or Truncated File)"
-        print " L = Loop-control block misplaced within the file"
-        print
-        print "Note: A nearly-threefold speed-up can be had by using CHECK_IS_ANIMATED rather than CHECK_COUNT_FRAMES"

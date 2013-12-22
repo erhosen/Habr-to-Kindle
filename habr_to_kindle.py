@@ -13,10 +13,7 @@ from lxml.builder import E
 from lxml import etree
 import gif
 
-# TODO: each hub to each folder
-# TODO: something useful with output weight
 # TODO: more documentation
-# TODO: connect bd
 # TODO: delete spoiler's and habracut
 
 # for example: '/Users/linustorvalds/KindleGen/kindlegen'
@@ -39,6 +36,7 @@ def create_mobi_file(html_filename):
     with open("/dev/null","w") as null:
         try:
             call([KINDLEGEN_PATH, html_filename, COMPRESS_FORMAT])
+            os.remove(html_filename)
         except OSError, e:
             print 'Wrong path to kindlegen; not generating .mobi version'
             print e
@@ -75,8 +73,8 @@ def replaceImages(html):
         path = resolve_path(img.get('src'))
         try:
             if '.gif' == path[-4:]:
-                gif_file = urllib.urlretrieve(path)
-                if gif.GifInfo(gif_file[0], 1).frameCount > 1:
+                gif_file = gif.GifInfo(urllib.urlretrieve(path)[0], 1)
+                if gif_file.frameCount > 1 or gif_file.height > 600 or gif_file.width > 600:
                     img.set('src', GIF_DUMMY)
                 else:
                     real_img = urllib.urlopen(path)
@@ -113,53 +111,62 @@ def save_content(post, article_filename):
     with open(article_filename,"w") as page_fp:
         page_fp.write( etree.tostring(html,pretty_print=True) )
 
-def get_content(link, path):
-    g = grab.Grab()
+def get_content(g, link, path):
     g.go(link)
-    post = {'title': None, 'body': None, 'author': None}
-    post['title'] = g.doc.select('//h1[@class="title"]/span[@class="post_title"]').text()
-    try:
-        post['author'] = g.doc.select('//div[@class="author"]/a').text()
-    except grab.error.DataNotFound:
-        post['author'] = 'habrahabr'
-
-    post_content = g.doc.select('//div[@class="content html_format"]').node()
-    post_rating = g.doc.select('//div[@class="voting   "]/div/span[@class="score"]').text()
-    post_comments = g.doc.select('//div[@class="comment_body"]').node_list()
-
-    post['body'] = E.body(E.h3(post['title']))
-
-    post['body'].append(post_content)
-    post['body'].append( E.p( E.b(post_rating + ' ' + post['author'])) )
-
-    for comment in post_comments:
-        com_class = comment.find('div[1]').get('class')
-        if com_class == "author_banned":
-            continue
-        else:
-            post['body'].append(E.hr())
+    if g.response.code == 404:
+        return 'Page not found, or something wrong with habr'
+    else:
+        post = {'title': None, 'body': None, 'author': None}
+        post['title'] = g.doc.select('//h1[@class="title"]/span[@class="post_title"]').text()
         try:
-            comment_author = comment.find('./div[1]/a[@class="username"]').text
-            comment_rating = comment.find('./div[1]/div[@class="voting   "]/div[1]/span').text
-        except AttributeError:
-            continue
-        comment_info = E.p( comment_rating + ' ' + comment_author)
-        comment_body = comment.find('./div[2]')
-        post['body'].append(comment_info)
-        post['body'].append(comment_body)
+            post['author'] = g.doc.select('//div[@class="author"]/a').text()
+        except grab.error.DataNotFound:
+            post['author'] = 'habrahabr'
 
-    article_filename = path + prepare_name(post['title']) + '.html'
+        post_content = g.doc.select('//div[@class="content html_format"]').node()
+        post_rating = g.doc.select('//div[@class="voting   "]/div/span[@class="score"]').text()
+        post_comments = g.doc.select('//div[@class="comment_body"]').node_list()
 
-    save_content(post, article_filename)
+        post['body'] = E.body(E.h3(post['title']))
 
-    return article_filename
+        post['body'].append(post_content)
+        post['body'].append( E.p( E.b(post_rating + ' ' + post['author'])) )
 
-def get_article_from_url(url, path='files/'):
-    html_filename = get_content(url, path)
-    print html_filename, 'ok'
-    create_mobi_file(html_filename)
+        for comment in post_comments:
+            com_class = comment.find('div[1]').get('class')
+            if com_class == "author_banned":
+                continue
+            else:
+                post['body'].append(E.hr())
+            try:
+                comment_author = comment.find('./div[1]/a[@class="username"]').text
+                comment_rating = comment.find('./div[1]/div[@class="voting   "]/div[1]/span').text
+            except AttributeError:
+                continue
+            comment_info = E.p( comment_rating + ' ' + comment_author)
+            comment_body = comment.find('./div[2]')
+            post['body'].append(comment_info)
+            post['body'].append(comment_body)
+
+        article_filename = path + prepare_name(post['title']) + '.html'
+
+        save_content(post, article_filename)
+
+        create_mobi_file(article_filename)
+
+        return article_filename
+
+def get_article_from_url(g, url, path='files/'):
+    result = get_content(g, url, path)
+    print result, 'ok'
+
+def create_folder(directory):
+    if not os.path.exists(directory):
+        os.makedirs(directory)
 
 def get_favorites(username):
+    path_to_folder = 'files/favs_' + username
+    create_folder(path_to_folder)
     link_list = []
     g = grab.Grab()
     g.go('http://habrahabr.ru/users/' + username + '/favorites/')
@@ -179,17 +186,23 @@ def get_favorites(username):
             nav = g.doc.select('//a[@class="next" and @id="next_page"]')
         else:
             for link in (elem for elem in link_list):
-                get_article_from_url(link, path='files/favs/')
-            print 'Result in files/favs/'
+                get_article_from_url(g, link, path=path_to_folder+'/')
+            print 'Result in', path_to_folder
 
 def get_data_from_db(cur, hub):
-    number_of_articles = raw_input('How mamy articles do you want? ')
-    sort_mode = raw_input('What sorting mode? ("rating", "comments", "Favs")')
-    cur.execute("SELECT * FROM %s ORDER BY %s DESC LIMIT %s" % (hub, sort_mode, number_of_articles))
+    path_to_folder = 'files/hub_' + hub
+    create_folder(path_to_folder)
+    g = grab.Grab()
+    number_of_articles = raw_input('How much articles do you want? (0 - all): ')
+    modes = {'1' : 'Score', '2' : 'Comments', '3' : 'Favs'}
+    if number_of_articles == '0':
+        cur.execute("SELECT * FROM %s" % (hub))
+    else:
+        sorting_mode = raw_input('What sorting mode? ("1 - rating", "2 - comments", "3 - favorites"): ')
+        cur.execute("SELECT * FROM %s ORDER BY %s DESC LIMIT %s" % (hub, modes[sorting_mode], number_of_articles))
     for post in (elem for elem in cur.fetchall()):
-        get_article_from_url(post[3], path='files/hub/')
-        # TODO: folder for hub
-    print 'Result in files/favs/'
+        get_article_from_url(g, post[3], path=path_to_folder+'/')
+    print 'Result in', path_to_folder
 
 if __name__ == '__main__':
     print 'habr_to_kindle ver.0.3 via ErhoSen 2013'
@@ -214,4 +227,5 @@ if __name__ == '__main__':
     elif mode == '2':
         get_favorites(raw_input('Username: '))
     elif mode == '3':
-        get_article_from_url(raw_input('link to article (for example "http://habrahabr.ru/post/148940/"): '))
+        g = grab.Grab()
+        get_article_from_url(g, raw_input('link to article (for example "http://habrahabr.ru/post/148940/"): '))
