@@ -2,102 +2,93 @@
 # encoding: utf-8
 
 import grab
-import urllib
-import sqlite3 as lite
-from subprocess import call
-import base64, mimetypes, urlparse
-import sys
 import os
-from string import punctuation
-from lxml.builder import E
+import sqlite3 as lite
 from lxml import etree
-import gif
+from lxml.builder import E
+from urllib import urlretrieve
+from shutil import rmtree, copy2
+from subprocess import call
+from string import punctuation
 
 # TODO: more documentation
-# TODO: delete spoiler's and habracut
+# TODO: REWRITE drop_tag. Delete spoilers and habracuts
 
-# for example: '/Users/linustorvalds/KindleGen/kindlegen'
+# for example: '/Users/linustorvalds/KindleGen/kindlegen' in Mac
+# or 'C:\KindleGen\klindlegen.exe' in Windows
 KINDLEGEN_PATH = '/Users/vladimirvazoveckov/KindleGen/kindlegen'
 
-# 1mb ~95% of all images in habr.
-MAX_PIC_WEIGTH = 512000 # 500 kB
+# 0.5mb ~95% of all images in habr.
+MAX_PIC_WEIGHT = 512000 # 500 kB
 
-# -c0: without compression -c1: standart DOC -c2: huffdic compression for Kindle
-COMPRESS_FORMAT = '-c0'
+# -c0: without compression
+# -c1: standart DOC
+# -c2: huffdic compression for Kindle
+COMPRESS_FORMAT = '-c2'
 
-def data_encode_image(name,content):
-    return u'data:%s;base64,%s' % (mimetypes.guess_type(name)[0], base64.standard_b64encode(content))
+DELETE_HTML_FILE = True
 
-# For animated GIFs
-GIF_DUMMY = data_encode_image('gif_dummy.gif', open('gif_dummy.gif').read())
-OBJ_DUMMY = data_encode_image('obj-dummy.gif', open('obj-dummy.gif').read())
-
-def create_mobi_file(html_filename):
-    with open("/dev/null","w") as null:
-        try:
-            call([KINDLEGEN_PATH, html_filename, COMPRESS_FORMAT])
-            os.remove(html_filename)
-        except OSError, e:
-            print 'Wrong path to kindlegen; not generating .mobi version'
-            print e
+def create_folder(directory):
+    if not os.path.exists(directory):
+        os.makedirs(directory)
 
 def prepare_name(name):
     return ''.join([ch for ch in name if not(ch in punctuation)])
 
-def is_remote(address):
-    return urlparse.urlparse(address)[0] in ('http', 'https')
+#def drop_tag(self):
+#    parent = self.getparent()
+#    assert parent is not None
+#    previous = self.getprevious()
+#    if self.text and isinstance(self.tag, basestring):
+#        # not a Comment, etc.
+#        if previous is None:
+#            parent.text = (parent.text or '') + self.text
+#        else:
+#            previous.tail = (previous.tail or '') + self.text
+#    if self.tail:
+#        if len(self):
+#            last = self[-1]
+#            last.tail = (last.tail or '') + self.tail
+#        elif previous is None:
+#            parent.text = (parent.text or '') + self.tail
+#        else:
+#            previous.tail = (previous.tail or '') + self.tail
+#    index = parent.index(self)
+#    parent[index:index+1] = self[:]
 
-def resolve_path(target):
-    base = 'http://habrahabr.ru/'
-    if True:
-        return urlparse.urljoin(base, target)
+def replace_objects(html, path):
+    img_folder = path + 'images/'
+    create_folder(img_folder)
+    copy2('gif_dummy.gif', img_folder)
+    copy2('obj_dummy.gif', img_folder)
 
-    if is_remote(target):
-        return target
-
-    if target.startswith('/'):
-        if is_remote(base):
-            protocol,rest = base.split('://')
-            return '%s://%s%s' % (protocol, rest.split('/')[0], target)
-        else:
-            return target
-    else:
-        try:
-            base, rest = base.rsplit('/', 1)
-            return '%s/%s' % (base, target)
-        except ValueError:
-            return target
-
-def replaceImages(html):
     for img in html.xpath('//img'):
-        path = resolve_path(img.get('src'))
+        img_url = img.get('src')
+        img_name = img_url.split('/')[-1]
         try:
-            if '.gif' == path[-4:]:
-                gif_file = gif.GifInfo(urllib.urlretrieve(path)[0], 1)
-                if gif_file.frameCount > 1 or gif_file.height > 600 or gif_file.width > 600:
-                    img.set('src', GIF_DUMMY)
-                else:
-                    real_img = urllib.urlopen(path)
-                    img.set('src', data_encode_image(path.lower(),real_img.read()))
+            real_img = urlretrieve(img_url, img_folder + img_name)
+            if int(real_img[1]['Content-Length']) > MAX_PIC_WEIGHT:
+                img.set('src', 'images/gif_dummy.gif')
             else:
-                real_img = urllib.urlopen(path)
-                if int(real_img.info()['Content-Length']) > MAX_PIC_WEIGTH:
-                    img.set('src', GIF_DUMMY)
-                else:
-                    img.set('src', data_encode_image(path.lower(),real_img.read()))
+                img.set('src', 'images/' + img_name)
         except Exception,e:
             print 'failed to load image from %s' % img.get('src')
             print e
 
-def replaceObj(html):
-    while len(html.xpath('//iframe')) != 0:
-        obj = html.xpath('//iframe')[0]
-        obj.getparent().replace(obj, E.img( {'src': OBJ_DUMMY}))
-    while len(html.xpath('//object')) !=0:
-        obj = html.xpath('//object')[0]
-        obj.getparent().replace(obj, E.img( {'src': OBJ_DUMMY}))
+    for obj in html.xpath('//*[self::iframe or self::object]'):
+        obj.getparent().replace(obj, E.img( {'src': 'images/obj_dummy.gif'}))
 
-def save_content(post, article_filename):
+def create_mobi_file(html_filename, path):
+    try:
+        call([KINDLEGEN_PATH, html_filename, COMPRESS_FORMAT])
+        if DELETE_HTML_FILE:
+            os.remove(html_filename)
+            rmtree(path + 'images/')
+    except OSError, e:
+        print 'Wrong path to kindlegen; not generating .mobi version'
+        print e
+
+def save_content(post, article_filename, path):
     html = E.html({ "xmlns": 'http://www.w3.org/1999/xhtml', "{http://www.w3.org/XML/1998/namespace}lang" : 'en', "lang": 'en' },
         E.head( E.meta( { 'http-equiv' : 'Content-Type', 'content' : 'http://www.w3.org/1999/xhtml; charset=utf-8' } ),
             E.title( post['title'] ),
@@ -105,13 +96,14 @@ def save_content(post, article_filename):
             E.meta( { 'name': 'description', 'content' : post['title']} ) ),
         post['body'] )
 
-    replaceImages(html)
-    replaceObj(html)
+    replace_objects(html, path)
 
-    with open(article_filename,"w") as page_fp:
-        page_fp.write( etree.tostring(html,pretty_print=True) )
+    with open(article_filename, "w") as page_fp:
+        page_fp.write( etree.tostring(html, pretty_print=True) )
 
-def get_content(g, link, path):
+    create_mobi_file(article_filename, path)
+
+def get_content(g, link, path='files/'):
     g.go(link)
     if g.response.code == 404:
         return 'Page not found, or something wrong with habr'
@@ -150,22 +142,12 @@ def get_content(g, link, path):
 
         article_filename = path + prepare_name(post['title']) + '.html'
 
-        save_content(post, article_filename)
+        save_content(post, article_filename, path)
 
-        create_mobi_file(article_filename)
-
-        return article_filename
-
-def get_article_from_url(g, url, path='files/'):
-    result = get_content(g, url, path)
-    print result, 'ok'
-
-def create_folder(directory):
-    if not os.path.exists(directory):
-        os.makedirs(directory)
+        print article_filename, 'ok'
 
 def get_favorites(username):
-    path_to_folder = 'files/favs_' + username
+    path_to_folder = 'files/favs_' + username + '/'
     create_folder(path_to_folder)
     link_list = []
     g = grab.Grab()
@@ -186,11 +168,11 @@ def get_favorites(username):
             nav = g.doc.select('//a[@class="next" and @id="next_page"]')
         else:
             for link in (elem for elem in link_list):
-                get_article_from_url(g, link, path=path_to_folder+'/')
+                get_content(g, link, path=path_to_folder)
             print 'Result in', path_to_folder
 
 def get_data_from_db(cur, hub):
-    path_to_folder = 'files/hub_' + hub
+    path_to_folder = 'files/hub_' + hub + '/'
     create_folder(path_to_folder)
     g = grab.Grab()
     number_of_articles = raw_input('How much articles do you want? (0 - all): ')
@@ -201,15 +183,15 @@ def get_data_from_db(cur, hub):
         sorting_mode = raw_input('What sorting mode? ("1 - rating", "2 - comments", "3 - favorites"): ')
         cur.execute("SELECT * FROM %s ORDER BY %s DESC LIMIT %s" % (hub, modes[sorting_mode], number_of_articles))
     for post in (elem for elem in cur.fetchall()):
-        get_article_from_url(g, post[3], path=path_to_folder+'/')
+        get_content(g, post[3], path=path_to_folder)
     print 'Result in', path_to_folder
 
 if __name__ == '__main__':
     print 'habr_to_kindle ver.0.3 via ErhoSen 2013'
     print 'Choose mode:'
-    print '1 - get N best(rating OR most commented OR most added to favorites) from hub'
-    print '2 - get all articles from favorites'
-    print '3 - get article from url'
+    print '1 - from hub'
+    print '2 - from favorites'
+    print '3 - from url'
     mode = ''
     while True:
         mode = raw_input('Mode: ')
@@ -228,4 +210,5 @@ if __name__ == '__main__':
         get_favorites(raw_input('Username: '))
     elif mode == '3':
         g = grab.Grab()
-        get_article_from_url(g, raw_input('link to article (for example "http://habrahabr.ru/post/148940/"): '))
+        get_content(g, raw_input('link to article (for example "http://habrahabr.ru/post/206916/"): '))
+        print 'Result in files/'
