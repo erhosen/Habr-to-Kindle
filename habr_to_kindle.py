@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 # encoding: utf-8
 
-import grab
 import os
 import sqlite3 as lite
-from lxml import etree
+from lxml.html import parse
 from lxml.builder import E
+from lxml import etree
 from urllib import urlretrieve
 from shutil import rmtree, copy2
 from subprocess import call
@@ -13,6 +13,7 @@ from string import punctuation
 
 # TODO: more documentation
 # TODO: REWRITE drop_tag. Delete spoilers and habracuts
+# TODO: Test on Windows
 
 # for example: '/Users/linustorvalds/KindleGen/kindlegen' in Mac
 # or 'C:\KindleGen\klindlegen.exe' in Windows
@@ -24,7 +25,7 @@ MAX_PIC_WEIGHT = 512000 # 500 kB
 # -c0: without compression
 # -c1: standart DOC
 # -c2: huffdic compression for Kindle
-COMPRESS_FORMAT = '-c2'
+COMPRESS_FORMAT = '-c0'
 
 DELETE_HTML_FILE = True
 
@@ -35,26 +36,26 @@ def create_folder(directory):
 def prepare_name(name):
     return ''.join([ch for ch in name if not(ch in punctuation)])
 
-#def drop_tag(self):
-#    parent = self.getparent()
-#    assert parent is not None
-#    previous = self.getprevious()
-#    if self.text and isinstance(self.tag, basestring):
-#        # not a Comment, etc.
-#        if previous is None:
-#            parent.text = (parent.text or '') + self.text
-#        else:
-#            previous.tail = (previous.tail or '') + self.text
-#    if self.tail:
-#        if len(self):
-#            last = self[-1]
-#            last.tail = (last.tail or '') + self.tail
-#        elif previous is None:
-#            parent.text = (parent.text or '') + self.tail
-#        else:
-#            previous.tail = (previous.tail or '') + self.tail
-#    index = parent.index(self)
-#    parent[index:index+1] = self[:]
+def drop_tag(self):
+    parent = self.getparent()
+    assert parent is not None
+    previous = self.getprevious()
+    if self.text and isinstance(self.tag, basestring):
+        # not a Comment, etc.
+        if previous is None:
+            parent.text = (parent.text or '') + self.text
+        else:
+            previous.tail = (previous.tail or '') + self.text
+    if self.tail:
+        if len(self):
+            last = self[-1]
+            last.tail = (last.tail or '') + self.tail
+        elif previous is None:
+            parent.text = (parent.text or '') + self.tail
+        else:
+            previous.tail = (previous.tail or '') + self.tail
+    index = parent.index(self)
+    parent[index:index+1] = self[:]
 
 def replace_objects(html, path):
     img_folder = path + 'images/'
@@ -103,21 +104,21 @@ def save_content(post, article_filename, path):
 
     create_mobi_file(article_filename, path)
 
-def get_content(g, link, path='files/'):
-    g.go(link)
-    if g.response.code == 404:
-        return 'Page not found, or something wrong with habr'
-    else:
+def get_content(link, path='files/'):
+    try:
         post = {'title': None, 'body': None, 'author': None}
-        post['title'] = g.doc.select('//h1[@class="title"]/span[@class="post_title"]').text()
+
+        data = parse(link)
+
+        post['title'] = data.find('//h1[@class="title"]/span[@class="post_title"]').text
         try:
-            post['author'] = g.doc.select('//div[@class="author"]/a').text()
-        except grab.error.DataNotFound:
+            post['author'] = data.find('//div[@class="author"]/a').text
+        except: # TODO: test this error
             post['author'] = 'habrahabr'
 
-        post_content = g.doc.select('//div[@class="content html_format"]').node()
-        post_rating = g.doc.select('//div[@class="voting   "]/div/span[@class="score"]').text()
-        post_comments = g.doc.select('//div[@class="comment_body"]').node_list()
+        post_content = data.find('//div[@class="content html_format"]')
+        post_rating = data.find('//div[@class="voting   "]/div/span[@class="score"]').text
+        post_comments = data.findall('//div[@class="comment_body"]')
 
         post['body'] = E.body(E.h3(post['title']))
 
@@ -146,35 +147,34 @@ def get_content(g, link, path='files/'):
 
         print article_filename, 'ok'
 
+    except IOError, e:
+        print e
+
 def get_favorites(username):
     path_to_folder = 'files/favs_' + username + '/'
     create_folder(path_to_folder)
     link_list = []
-    g = grab.Grab()
-    g.go('http://habrahabr.ru/users/' + username + '/favorites/')
-    if g.response.code == 404:
-        print 'User not found, or something wrong with habr'
-        get_favorites(raw_input('Username: '))
-    elif g.response.code == 200:
-        nav = g.doc.select('//a[@class="next" and @id="next_page"]')
-        for elem in g.doc.select('//div[@class="posts shortcuts_items"]/div/h1/a[1]'):
-            print 'find:', elem.text(), elem.attr('href')
-            link_list.append(elem.attr('href'))
-        while nav.exists():
-            g.go(nav.attr('href'))
-            for elem in g.doc.select('//div[@class="posts shortcuts_items"]/div/h1/a[1]'):
-                print 'find:', elem.text(), elem.attr('href')
-                link_list.append(elem.attr('href'))
-            nav = g.doc.select('//a[@class="next" and @id="next_page"]')
-        else:
-            for link in (elem for elem in link_list):
-                get_content(g, link, path=path_to_folder)
-            print 'Result in', path_to_folder
+
+    def get_favs(url):
+        fav_page = parse(url)
+        next_page = fav_page.xpath('//a[@class="next" and @id="next_page"]')
+        for elem in fav_page.xpath('//div[@class="posts shortcuts_items"]/div/h1/a[1]'):
+            print 'find:', elem.text, elem.get('href')
+            link_list.append(elem.get('href'))
+        if len(next_page) > 0: get_favs('http://habrahabr.ru' + next_page[0].get('href'))
+
+    try:
+        get_favs('http://habrahabr.ru/users/' + username + '/favorites/')
+        for link in (elem for elem in link_list):
+            get_content(link, path=path_to_folder)
+        print 'Result in', path_to_folder
+    except IOError, e:
+        print e
+        return
 
 def get_data_from_db(cur, hub):
     path_to_folder = 'files/hub_' + hub + '/'
     create_folder(path_to_folder)
-    g = grab.Grab()
     number_of_articles = raw_input('How much articles do you want? (0 - all): ')
     modes = {'1' : 'Score', '2' : 'Comments', '3' : 'Favs'}
     if number_of_articles == '0':
@@ -183,7 +183,7 @@ def get_data_from_db(cur, hub):
         sorting_mode = raw_input('What sorting mode? ("1 - rating", "2 - comments", "3 - favorites"): ')
         cur.execute("SELECT * FROM %s ORDER BY %s DESC LIMIT %s" % (hub, modes[sorting_mode], number_of_articles))
     for post in (elem for elem in cur.fetchall()):
-        get_content(g, post[3], path=path_to_folder)
+        get_content(post[3], path=path_to_folder)
     print 'Result in', path_to_folder
 
 if __name__ == '__main__':
@@ -209,6 +209,5 @@ if __name__ == '__main__':
     elif mode == '2':
         get_favorites(raw_input('Username: '))
     elif mode == '3':
-        g = grab.Grab()
-        get_content(g, raw_input('link to article (for example "http://habrahabr.ru/post/206916/"): '))
+        get_content(raw_input('link to article (for example "http://habrahabr.ru/post/206916/"): '))
         print 'Result in files/'
