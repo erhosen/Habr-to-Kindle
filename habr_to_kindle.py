@@ -16,8 +16,8 @@ from string import punctuation
 # TODO: Test on Windows
 
 # for example: '/Users/linustorvalds/KindleGen/kindlegen' in Mac
-# or 'C:\KindleGen\klindlegen.exe' in Windows
-KINDLEGEN_PATH = '/Users/vladimirvazoveckov/KindleGen/kindlegen'
+# or 'C:\KindleGen\kindlegen.exe' in Windows
+KINDLEGEN_PATH = 'c:\KindleGen\kindlegen.exe'
 
 # 0.5mb ~95% of all images in habr.
 MAX_PIC_WEIGHT = 512000 # 500 kB
@@ -81,7 +81,7 @@ def replace_objects(html, path):
 
 def create_mobi_file(html_filename, path):
     try:
-        call([KINDLEGEN_PATH, html_filename, COMPRESS_FORMAT])
+        call([KINDLEGEN_PATH, html_filename.encode('utf-8'), COMPRESS_FORMAT])
         if DELETE_HTML_FILE:
             os.remove(html_filename)
             rmtree(path + 'images/')
