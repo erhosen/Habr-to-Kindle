@@ -12,8 +12,8 @@ from subprocess import call
 from string import punctuation
 
 # TODO: more documentation
-# TODO: REWRITE drop_tag. Delete spoilers and habracuts
 # TODO: Test on Windows
+# TODO: OPF for hub, favs
 
 # for example: '/Users/linustorvalds/KindleGen/kindlegen' in Mac
 # or 'C:\KindleGen\kindlegen.exe' in Windows
@@ -27,7 +27,7 @@ MAX_PIC_WEIGHT = 512000 # 500 kB
 # -c2: huffdic compression for Kindle
 COMPRESS_FORMAT = '-c0'
 
-DELETE_HTML_FILE = True
+DELETE_HTML_FILE = False
 
 def create_folder(directory):
     if not os.path.exists(directory):
@@ -36,26 +36,26 @@ def create_folder(directory):
 def prepare_name(name):
     return ''.join([ch for ch in name if not(ch in punctuation)])
 
-def drop_tag(self):
-    parent = self.getparent()
+def drop_tag(dtag):
+    parent = dtag.getparent()
     assert parent is not None
-    previous = self.getprevious()
-    if self.text and isinstance(self.tag, basestring):
+    previous = dtag.getprevious()
+    if dtag.text and isinstance(dtag.tag, basestring):
         # not a Comment, etc.
         if previous is None:
-            parent.text = (parent.text or '') + self.text
+            parent.text = (parent.text or '') + dtag.text
         else:
-            previous.tail = (previous.tail or '') + self.text
-    if self.tail:
-        if len(self):
-            last = self[-1]
-            last.tail = (last.tail or '') + self.tail
+            previous.tail = (previous.tail or '') + dtag.text
+    if dtag.tail:
+        if len(dtag):
+            last = dtag[-1]
+            last.tail = (last.tail or '') + dtag.tail
         elif previous is None:
-            parent.text = (parent.text or '') + self.tail
+            parent.text = (parent.text or '') + dtag.tail
         else:
-            previous.tail = (previous.tail or '') + self.tail
-    index = parent.index(self)
-    parent[index:index+1] = self[:]
+            previous.tail = (previous.tail or '') + dtag.tail
+    index = parent.index(dtag)
+    parent[index:index+1] = dtag[:]
 
 def replace_objects(html, path):
     img_folder = path + 'images/'
@@ -78,6 +78,14 @@ def replace_objects(html, path):
 
     for obj in html.xpath('//*[self::iframe or self::object]'):
         obj.getparent().replace(obj, E.img( {'src': 'images/obj_dummy.gif'}))
+
+    for elem in html.xpath('//a'):
+        drop_tag(elem)
+
+    for elem in html.xpath('//div[@class="spoiler"]'):
+        elem.find('./b[1]').append(E.br())
+        drop_tag(elem.find('./div[1]'))
+        drop_tag(elem)
 
 def create_mobi_file(html_filename, path):
     try:
@@ -187,7 +195,7 @@ def get_data_from_db(cur, hub):
     print 'Result in', path_to_folder
 
 if __name__ == '__main__':
-    print 'habr_to_kindle ver.0.3 via ErhoSen 2013'
+    print 'habr_to_kindle ver.0.4 via ErhoSen 2013'
     print 'Choose mode:'
     print '1 - from hub'
     print '2 - from favorites'
