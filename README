@@ -1,3 +1,9 @@
-Habr_to_kindle v0.0
+Habr_to_kindle v1.0
 
-# TODO: readme
+1. Вытягивать лучшие статейки по хабам.
+2. Парсить избранное
+3. Просто стянуть рандомную статью.
+
+Для корректной работы, нужно скачать kindlen и указать у нему путь в habr_to_kindle.py.
+
+kindlen - http://www.amazon.com/gp/feature.html?docId=1000765211
