@@ -4,6 +4,6 @@ Habr_to_kindle v1.0
 2. Парсить избранное
 3. Просто стянуть рандомную статью.
 
-Для корректной работы, нужно скачать kindlgen и указать у нему путь в habr_to_kindle.py.
+Для корректной работы, нужно скачать kindlegen и указать у нему путь в habr_to_kindle.py.
 
-kindlgen - http://www.amazon.com/gp/feature.html?docId=1000765211
+kindlegen - http://www.amazon.com/gp/feature.html?docId=1000765211
