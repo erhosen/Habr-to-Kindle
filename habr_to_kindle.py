@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # encoding: utf-8
 
 import os
@@ -6,7 +6,7 @@ import sqlite3 as lite
 from lxml.html import parse
 from lxml.builder import E
 from lxml import etree
-from urllib import urlretrieve
+from urllib.request import urlretrieve
 from shutil import rmtree, copy2
 from subprocess import call
 from string import punctuation
@@ -17,7 +17,7 @@ from string import punctuation
 
 # for example: '/Users/linustorvalds/KindleGen/kindlegen' in Mac
 # or 'C:\KindleGen\kindlegen.exe' in Windows
-KINDLEGEN_PATH = 'c:\KindleGen\kindlegen.exe'
+KINDLEGEN_PATH = 'c:\kindlegen\kindlegen.exe'
 
 # 0.5mb ~95% of all images in habr.
 MAX_PIC_WEIGHT = 512000 # 500 kB
@@ -40,7 +40,7 @@ def drop_tag(dtag):
     parent = dtag.getparent()
     assert parent is not None
     previous = dtag.getprevious()
-    if dtag.text and isinstance(dtag.tag, basestring):
+    if dtag.text and isinstance(dtag.tag, str):
         # not a Comment, etc.
         if previous is None:
             parent.text = (parent.text or '') + dtag.text
@@ -72,9 +72,9 @@ def replace_objects(html, path):
                 img.set('src', 'images/gif_dummy.gif')
             else:
                 img.set('src', 'images/' + img_name)
-        except Exception,e:
-            print 'failed to load image from %s' % img.get('src')
-            print e
+        except Exception as e:
+            print('failed to load image from %s' % img.get('src'))
+            print(e)
 
     for obj in html.xpath('//*[self::iframe or self::object]'):
         obj.getparent().replace(obj, E.img( {'src': 'images/obj_dummy.gif'}))
@@ -93,9 +93,9 @@ def create_mobi_file(html_filename, path):
         if DELETE_HTML_FILE:
             os.remove(html_filename)
             rmtree(path + 'images/')
-    except OSError, e:
-        print 'Wrong path to kindlegen; not generating .mobi version'
-        print e
+    except OSError as e:
+        print('Wrong path to kindlegen; not generating .mobi version')
+        print(e)
 
 def save_content(post, article_filename, path):
     html = E.html({ "xmlns": 'http://www.w3.org/1999/xhtml', "{http://www.w3.org/XML/1998/namespace}lang" : 'en', "lang": 'en' },
@@ -107,7 +107,7 @@ def save_content(post, article_filename, path):
 
     replace_objects(html, path)
 
-    with open(article_filename, "w") as page_fp:
+    with open(article_filename, "wb") as page_fp:
         page_fp.write( etree.tostring(html, pretty_print=True) )
 
     create_mobi_file(article_filename, path)
@@ -153,10 +153,10 @@ def get_content(link, path='files/'):
 
         save_content(post, article_filename, path)
 
-        print article_filename, 'ok'
+        print(article_filename, 'ok')
 
-    except IOError, e:
-        print e
+    except IOError as e:
+        print(e)
 
 def get_favorites(username):
     path_to_folder = 'files/favs_' + username + '/'
@@ -167,7 +167,7 @@ def get_favorites(username):
         fav_page = parse(url)
         next_page = fav_page.xpath('//a[@class="next" and @id="next_page"]')
         for elem in fav_page.xpath('//div[@class="posts shortcuts_items"]/div/h1/a[1]'):
-            print 'find:', elem.text, elem.get('href')
+            print('find:', elem.text, elem.get('href'))
             link_list.append(elem.get('href'))
         if len(next_page) > 0: get_favs('http://habrahabr.ru' + next_page[0].get('href'))
 
@@ -175,47 +175,47 @@ def get_favorites(username):
         get_favs('http://habrahabr.ru/users/' + username + '/favorites/')
         for link in (elem for elem in link_list):
             get_content(link, path=path_to_folder)
-        print 'Result in', path_to_folder
-    except IOError, e:
-        print e
+        print('Result in', path_to_folder)
+    except IOError as e:
+        print(e)
         return
 
 def get_data_from_db(cur, hub):
     path_to_folder = 'files/hub_' + hub + '/'
     create_folder(path_to_folder)
-    number_of_articles = raw_input('How much articles do you want? (0 - all): ')
+    number_of_articles = input('How much articles do you want? (0 - all): ')
     modes = {'1' : 'Score', '2' : 'Comments', '3' : 'Favs'}
     if number_of_articles == '0':
         cur.execute("SELECT * FROM %s" % (hub))
     else:
-        sorting_mode = raw_input('What sorting mode? ("1 - rating", "2 - comments", "3 - favorites"): ')
+        sorting_mode = input('What sorting mode? ("1 - rating", "2 - comments", "3 - favorites"): ')
         cur.execute("SELECT * FROM %s ORDER BY %s DESC LIMIT %s" % (hub, modes[sorting_mode], number_of_articles))
     for post in (elem for elem in cur.fetchall()):
         get_content(post[3], path=path_to_folder)
-    print 'Result in', path_to_folder
+    print('Result in', path_to_folder)
 
 if __name__ == '__main__':
-    print 'habr_to_kindle ver.0.4 via ErhoSen 2013'
-    print 'Choose mode:'
-    print '1 - from hub'
-    print '2 - from favorites'
-    print '3 - from url'
+    print('habr_to_kindle ver.0.4 via ErhoSen 2013')
+    print('Choose mode:')
+    print('1 - from hub')
+    print('2 - from favorites')
+    print('3 - from url')
     mode = ''
     while True:
-        mode = raw_input('Mode: ')
+        mode = input('Mode: ')
         if mode in ['1', '2', '3']: break
-        else: print "Wrong mode, try again"
+        else: print("Wrong mode, try again")
     if mode == '1':
         con = lite.connect('db/habra_hubs.db')
         cur = con.cursor()
         cur.execute("SELECT name FROM sqlite_master WHERE type='table';")
         for elem in (elem[0] for elem in cur.fetchall()):
-            print elem,
-        print '\n'
-        hub = raw_input('What hub are you interesting for? (for example "python"): ')
+            print(elem, end=' ')
+        print('\n')
+        hub = input('What hub are you interesting for? (for example "python"): ')
         get_data_from_db(cur, hub)
     elif mode == '2':
-        get_favorites(raw_input('Username: '))
+        get_favorites(input('Username: '))
     elif mode == '3':
-        get_content(raw_input('link to article (for example "http://habrahabr.ru/post/206916/"): '))
-        print 'Result in files/'
+        get_content(input('link to article (for example "http://habrahabr.ru/post/206916/"): '))
+        print('Result in files/')
