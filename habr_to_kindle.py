@@ -89,7 +89,7 @@ def replace_objects(html, path):
 
 def create_mobi_file(html_filename, path):
     try:
-        call([KINDLEGEN_PATH, html_filename.encode('utf-8'), COMPRESS_FORMAT])
+        call([KINDLEGEN_PATH, html_filename, COMPRESS_FORMAT])
         if DELETE_HTML_FILE:
             os.remove(html_filename)
             rmtree(path + 'images/')
