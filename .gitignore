@@ -1,6 +1,55 @@
-.idea/
-tests.py
-some help/
-SOME PROBLEMS WITH/
-*.pyc
-files/
+/files/
+Thumbs.db
+
+# Python's .gitignore
+# https://github.com/github/gitignore/blob/master/Python.gitignore
+#
+__pycache__/
+*.py[cod]
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+*.manifest
+*.spec
+pip-log.txt
+pip-delete-this-directory.txt
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*,cover
+*.mo
+*.pot
+*.log
+docs/_build/
+target/
+
+# Windows .gitignore
+# https://github.com/github/gitignore/blob/master/Windows.gitignore
+#
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
+*.lnk
