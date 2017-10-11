@@ -10,6 +10,7 @@ from urllib.request import urlretrieve
 from shutil import rmtree, copy2
 from subprocess import call
 from string import punctuation
+from urllib.request import urlopen
 
 # TODO: more documentation
 # TODO: Test on Windows
@@ -116,7 +117,7 @@ def get_content(link, path='files/'):
     try:
         post = {'title': None, 'body': None, 'author': None}
 
-        data = parse(link)
+        data = parse(urlopen(link))
 
         post['title'] = data.find('//h1[@class="title"]/span[@class="post_title"]').text
         try:
@@ -164,7 +165,7 @@ def get_favorites(username):
     link_list = []
 
     def get_favs(url):
-        fav_page = parse(url)
+        fav_page = parse(urlopen(url))
         next_page = fav_page.xpath('//a[@class="next" and @id="next_page"]')
         for elem in fav_page.xpath('//div[@class="posts shortcuts_items"]/div/h1/a[1]'):
             print('find:', elem.text, elem.get('href'))
