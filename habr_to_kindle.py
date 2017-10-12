@@ -10,6 +10,7 @@ from urllib.request import urlretrieve
 from shutil import rmtree, copy2
 from subprocess import call
 from string import punctuation
+from urllib.request import urlopen
 
 # TODO: more documentation
 # TODO: Test on Windows
@@ -116,17 +117,23 @@ def get_content(link, path='files/'):
     try:
         post = {'title': None, 'body': None, 'author': None}
 
-        data = parse(link)
+        data = parse(urlopen(link))
 
-        post['title'] = data.find('//h1[@class="title"]/span[@class="post_title"]').text
+        post['title'] = data.find('//h1[@class="post__title post__title_full"]/span[@class="post__title-text"]').text
         try:
-            post['author'] = data.find('//div[@class="author"]/a').text
+            post['author'] = data.find('//span[@class="user-info__nickname user-info__nickname_small"]').text
         except: # TODO: test this error
             post['author'] = 'habrahabr'
 
-        post_content = data.find('//div[@class="content html_format"]')
-        post_rating = data.find('//div[@class="voting   "]/div/span[@class="score"]').text
-        post_comments = data.findall('//div[@class="comment_body"]')
+        post_content = data.find('//div[@class="post__text post__text-html js-mediator-article"]')
+        try:
+            post_rating = data.find('//div[@class="voting   "]/div/span[@class="score"]').text
+        except: # TODO: Get correct tag for New Habrahabr.
+            post_rating=''
+        try:
+            post_comments = data.findall('//div[@class="comment_body"]')
+        except: # TODO: Get correct tag
+            post_comments=''
 
         post['body'] = E.body(E.h3(post['title']))
 
@@ -164,12 +171,12 @@ def get_favorites(username):
     link_list = []
 
     def get_favs(url):
-        fav_page = parse(url)
-        next_page = fav_page.xpath('//a[@class="next" and @id="next_page"]')
-        for elem in fav_page.xpath('//div[@class="posts shortcuts_items"]/div/h1/a[1]'):
+        fav_page = parse(urlopen(url))
+        next_page = fav_page.xpath('//a[@class="arrows-pagination__item-link arrows-pagination__item-link_next" and @id="next_page"]')
+        for elem in fav_page.xpath('//a[@class="post__title_link"]'):
             print('find:', elem.text, elem.get('href'))
             link_list.append(elem.get('href'))
-        if len(next_page) > 0: get_favs('http://habrahabr.ru' + next_page[0].get('href'))
+        if len(next_page) > 0: get_favs('https://habrahabr.ru' + next_page[0].get('href'))
 
     try:
         get_favs('http://habrahabr.ru/users/' + username + '/favorites/')
